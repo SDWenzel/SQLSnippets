@@ -1,0 +1,38 @@
+--** Compare columns in two tables of the same name in different servers/databases/schemas
+--** Identifies 
+--**   columns missing from the standard table (nonstandard)
+--**   columns missing from the target table (missing)
+--**   columns with different data types
+--**   columns with different character lengths
+SELECT IsNull(std.Table_Name, tgt.Table_Name) AS TblNm, 
+       IsNull(std.Column_Name, tgt.Column_Name) AS ColNm, 
+       std.Data_Type AS stdDatatype, 
+       tgt.Data_Type AS tgtDatatype, 
+       --** not showing this data when either value is NULL is intentional
+       Convert(varchar, std.Character_Maximum_Length) + '/' + 
+       Convert(varchar, tgt.Character_Maximum_Length) AS [MaxLen std/tgt],
+       CASE 
+         WHEN std.Table_Name IS NULL THEN 'Nonstandard column'
+         WHEN tgt.Table_Name IS NULL THEN 'Missing column'
+         WHEN std.Data_Type <> tgt.Data_Type THEN 'Datatype difference'
+         WHEN std.Character_Maximum_Length <> tgt.Character_Maximum_Length 
+              THEN 'Datalength difference'
+       END AS Issue
+  FROM CPDB__Master.Information_Schema.Columns std
+  FULL JOIN CPDB_ID_Ada.Information_Schema.Columns tgt 
+    ON tgt.Table_Name = std.Table_Name 
+   AND tgt.Column_Name = std.Column_Name
+ WHERE std.Table_Name = 'Parcel'
+   AND (   std.Table_Name IS NULL
+        OR tgt.Table_Name IS NULL
+        OR std.Data_Type <> tgt.Data_Type
+        OR std.Character_Maximum_Length <> tgt.Character_Maximum_Length
+       )
+ --** Order by issue, then by column name
+ ORDER BY CASE 
+            WHEN std.Column_Name IS NULL THEN 'a' 
+            WHEN tgt.Column_Name IS NULL THEN 'b'
+            WHEN std.Data_Type <> tgt.Data_Type THEN 'd'
+            ELSE 'z'
+          END + 
+          IsNull(std.Column_Name, tgt.Column_Name)
